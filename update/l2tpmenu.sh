@@ -10,10 +10,11 @@ echo -e "$y-------------------------------------------------------------$wh"
 echo -e "$yy 1$y. Create Account L2TP"
 echo -e "$yy 2$y. Delete Account L2TP"
 echo -e "$yy 3$y. Extending Account L2TP Active Life"
-echo -e "$yy 4$y. Menu"
-echo -e "$yy 5$y. Exit"
+echo -e "$yy 4$y. Check User L2TP"
+echo -e "$yy 5$y. Menu"
+echo -e "$yy 6$y. Exit"
 echo -e "$y-------------------------------------------------------------$wh"
-read -p "Select From Options [ 1 - 7 ] : " menu
+read -p "Select From Options [ 1 - 6 ] : " menu
 echo -e ""
 case $menu in
 1)
@@ -26,10 +27,15 @@ dell2tp
 renewl2tp
 ;;
 4)
+cek-l2tp
+read -n 1 -s -r -p "Press any key to back on menu"
+l2tpmenu
+;;
+5)
 clear
 menu
 ;;
-5)
+6)
 clear
 exit
 ;;
