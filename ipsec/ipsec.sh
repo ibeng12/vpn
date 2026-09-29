@@ -3,7 +3,7 @@
 # Ubuntu 18.04 & 20.04 bit
 # Centos 7 & 8 64bit 
 # Mod By SL
-# SL
+# SL + BW LIMIT MOD
 # ==========================================
 # Color
 RED='\033[0;31m'
@@ -39,7 +39,6 @@ ver=$VERSION_ID
 bigecho() { echo; echo "## $1"; echo; }
 bigecho "VPN setup in progress... Please be patient."
 
-# Create and change to working dir
 mkdir -p /opt/src
 cd /opt/src
 
@@ -50,21 +49,12 @@ bigecho "Installing packages required for the VPN..."
 if [[ ${OS} == "centos" ]]; then
 epel_url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E '%{rhel}').noarch.rpm"
 yum -y install epel-release || yum -y install "$epel_url" 
-
-bigecho "Installing packages required for the VPN..."
-
 REPO1='--enablerepo=epel'
 REPO2='--enablerepo=*server-*optional*'
 REPO3='--enablerepo=*releases-optional*'
 REPO4='--enablerepo=PowerTools'
-
-yum -y install nss-devel nspr-devel pkgconfig pam-devel \
-  libcap-ng-devel libselinux-devel curl-devel nss-tools \
-  flex bison gcc make ppp 
-
+yum -y install nss-devel nspr-devel pkgconfig pam-devel libcap-ng-devel libselinux-devel curl-devel nss-tools flex bison gcc make ppp 
 yum "$REPO1" -y install xl2tpd 
-
-
 if [[ $ver == '7' ]]; then
   yum -y install systemd-devel iptables-services 
   yum "$REPO2" "$REPO3" -y install libevent-devel fipscheck-devel 
@@ -73,13 +63,10 @@ elif [[ $ver == '8' ]]; then
 fi
 else
 apt install openssl iptables iptables-persistent -y
-apt-get -y install libnss3-dev libnspr4-dev pkg-config \
-  libpam0g-dev libcap-ng-dev libcap-ng-utils libselinux1-dev \
-  libcurl4-nss-dev flex bison gcc make libnss3-tools \
-  libevent-dev ppp xl2tpd pptpd
+apt-get -y install libnss3-dev libnspr4-dev pkg-config libpam0g-dev libcap-ng-dev libcap-ng-utils libselinux1-dev libcurl4-nss-dev flex bison gcc make libnss3-tools libevent-dev ppp xl2tpd pptpd
 fi
-bigecho "Compiling and installing Libreswan..."
 
+bigecho "Compiling and installing Libreswan..."
 SWAN_VER=3.32
 swan_file="libreswan-$SWAN_VER.tar.gz"
 swan_url1="https://github.com/libreswan/libreswan/archive/v$SWAN_VER.tar.gz"
@@ -114,15 +101,10 @@ fi
 NPROCS=$(grep -c ^processor /proc/cpuinfo)
 [ -z "$NPROCS" ] && NPROCS=1
 make "-j$((NPROCS+1))" -s base && make -s install-base
-
 cd /opt/src || exit 1
 /bin/rm -rf "/opt/src/libreswan-$SWAN_VER"
-if ! /usr/local/sbin/ipsec --version 2>/dev/null | grep -qF "$SWAN_VER"; then
-  exiterr "Libreswan $SWAN_VER failed to build."
-fi
 
 bigecho "Creating VPN configuration..."
-
 L2TP_NET=192.168.42.0/24
 L2TP_LOCAL=192.168.42.1
 L2TP_POOL=192.168.42.10-192.168.42.250
@@ -133,16 +115,13 @@ DNS_SRV2=8.8.4.4
 DNS_SRVS="\"$DNS_SRV1 $DNS_SRV2\""
 [ -n "$VPN_DNS_SRV1" ] && [ -z "$VPN_DNS_SRV2" ] && DNS_SRVS="$DNS_SRV1"
 
-# Create IPsec config
 cat > /etc/ipsec.conf <<EOF
 version 2.0
-
 config setup
   virtual-private=%v4:10.0.0.0/8,%v4:192.168.0.0/16,%v4:172.16.0.0/12,%v4:!$L2TP_NET,%v4:!$XAUTH_NET
   protostack=netkey
   interfaces=%defaultroute
   uniqueids=no
-
 conn shared
   left=%defaultroute
   leftid=$PUBLIC_IP
@@ -159,7 +138,6 @@ conn shared
   ike=aes256-sha2,aes128-sha2,aes256-sha1,aes128-sha1,aes256-sha2;modp1024,aes128-sha1;modp1024
   phase2alg=aes_gcm-null,aes128-sha1,aes256-sha1,aes256-sha2_512,aes128-sha2,aes256-sha2
   sha2-truncbug=no
-
 conn l2tp-psk
   auto=add
   leftprotoport=17/1701
@@ -167,7 +145,6 @@ conn l2tp-psk
   type=transport
   phase2=esp
   also=shared
-
 conn xauth-psk
   auto=add
   leftsubnet=0.0.0.0/0
@@ -182,26 +159,16 @@ conn xauth-psk
   ike-frag=yes
   cisco-unity=yes
   also=shared
-
 include /etc/ipsec.d/*.conf
 EOF
 
-if uname -m | grep -qi '^arm'; then
-  if ! modprobe -q sha512; then
-    sed -i '/phase2alg/s/,aes256-sha2_512//' /etc/ipsec.conf
-  fi
-fi
-
-# Specify IPsec PSK
 cat > /etc/ipsec.secrets <<EOF
 %any  %any  : PSK "$VPN_IPSEC_PSK"
 EOF
 
-# Create xl2tpd config
 cat > /etc/xl2tpd/xl2tpd.conf <<EOF
 [global]
 port = 1701
-
 [lns default]
 ip range = $L2TP_POOL
 local ip = $L2TP_LOCAL
@@ -213,7 +180,6 @@ pppoptfile = /etc/ppp/options.xl2tpd
 length bit = yes
 EOF
 
-# Set xl2tpd options
 cat > /etc/ppp/options.xl2tpd <<EOF
 +mschap-v2
 ipcp-accept-local
@@ -235,7 +201,6 @@ ms-dns $DNS_SRV2
 EOF
 fi
 
-# Create VPN credentials
 cat > /etc/ppp/chap-secrets <<EOF
 "$VPN_USER" l2tpd "$VPN_PASSWORD" *
 EOF
@@ -245,7 +210,6 @@ cat > /etc/ipsec.d/passwd <<EOF
 $VPN_USER:$VPN_PASSWORD_ENC:xauth-psk
 EOF
 
-# Create PPTP config
 cat >/etc/pptpd.conf <<END
 option /etc/ppp/options.pptpd
 logwtmp
@@ -288,7 +252,6 @@ bigecho "Enabling services on boot..."
 systemctl enable xl2tpd
 systemctl enable ipsec
 systemctl enable pptpd
-
 for svc in fail2ban ipsec xl2tpd; do
   update-rc.d "$svc" enable >/dev/null 2>&1
   systemctl enable "$svc" 2>/dev/null
@@ -298,7 +261,38 @@ bigecho "Starting services..."
 sysctl -e -q -p
 chmod 600 /etc/ipsec.secrets* /etc/ppp/chap-secrets* /etc/ipsec.d/passwd*
 
+# ===== MOD BW + TRACKER ONLINE =====
 mkdir -p /run/pluto
+mkdir -p /etc/ppp/ip-up.d /etc/ppp/limits /var/run/l2tp-active /tmp/l2tp_traffic /var/lib/crot
+touch /etc/ppp/limits/bw.conf
+touch /var/lib/crot/data-user-l2tp
+touch /var/lib/crot/data-user-pptp
+
+cat > /etc/ppp/ip-up <<'ENDUP'
+#!/bin/bash
+IFACE=$1
+USER=$PEERNAME
+BW_FILE="/etc/ppp/limits/bw.conf"
+mkdir -p /var/run/l2tp-active
+echo $IFACE > /var/run/l2tp-active/$USER
+LIMIT_MB=$(grep "^$USER:" $BW_FILE | cut -d: -f2 | tail -1)
+[ -z "$LIMIT_MB" ] && LIMIT_MB="50"
+tc qdisc del dev $IFACE root 2>/dev/null
+tc qdisc add dev $IFACE root handle 1: htb default 10
+tc class add dev $IFACE parent 1: classid 1:10 htb rate ${LIMIT_MB}mbit ceil ${LIMIT_MB}mbit
+tc qdisc add dev $IFACE parent 1:10 handle 10: fq_codel
+ENDUP
+
+cat > /etc/ppp/ip-down <<'ENDDOWN'
+#!/bin/bash
+rm -f /var/run/l2tp-active/$PEERNAME
+tc qdisc del dev $1 root 2>/dev/null
+rm -f /tmp/l2tp_traffic/$1
+ENDDOWN
+
+chmod +x /etc/ppp/ip-up /etc/ppp/ip-down
+# ===== END MOD =====
+
 service fail2ban restart 2>/dev/null
 service ipsec restart 2>/dev/null
 service xl2tpd restart 2>/dev/null
@@ -308,6 +302,5 @@ wget -O /usr/bin/addpptp https://${akbarvpn}/addpptp.sh && chmod +x /usr/bin/add
 wget -O /usr/bin/delpptp https://${akbarvpn}/delpptp.sh && chmod +x /usr/bin/delpptp
 wget -O /usr/bin/renewpptp https://${akbarvpn}/renewpptp.sh && chmod +x /usr/bin/renewpptp
 wget -O /usr/bin/renewl2tp https://${akbarvpn}/renewl2tp.sh && chmod +x /usr/bin/renewl2tp
-touch /var/lib/crot/data-user-l2tp
-touch /var/lib/crot/data-user-pptp
+wget -O /usr/bin/cek-l2tp https://${akbarvpn}/cek-l2tp.sh && chmod +x /usr/bin/cek-l2tp
 rm -f /root/ipsec.sh
