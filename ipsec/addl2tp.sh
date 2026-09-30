@@ -1,4 +1,5 @@
 #!/bin/bash
+# SL MOD + BW LIMIT + IP LIMIT
 RED='\033[0;31m'
 NC='\033[0m'
 GREEN='\033[0;32m'
@@ -35,11 +36,18 @@ until [[ $VPN_USER =~ ^[a-zA-Z0-9_]+$ && ${CLIENT_EXISTS} == '0' ]]; do
 	done
 read -p "Password : " VPN_PASSWORD
 read -p "Expired (Days) : " masaaktif
-read -p "Limit Speed (Mbps, default 50) : " LIMIT_MB
-[ -z "$LIMIT_MB" ] && LIMIT_MB=50
+read -p "Limit Speed (contoh 100 untuk 100Mbps) : " LIMIT_INPUT
+read -p "Limit IP / Device (contoh 2 untuk 2 device) [2]: " LIMIT_IP
 hariini=`date -d "0 days" +"%Y-%m-%d"`
 exp=`date -d "$masaaktif days" +"%Y-%m-%d"`
 clear
+if [ "$LIMIT_INPUT" -ge 1000 ]; then
+  LIMIT_MB=$(($LIMIT_INPUT / 100))
+else
+  LIMIT_MB=$LIMIT_INPUT
+fi
+if [ -z "$LIMIT_MB" ]; then LIMIT_MB=100; fi
+if [ -z "$LIMIT_IP" ]; then LIMIT_IP=2; fi
 cat >> /etc/ppp/chap-secrets <<EOF
 "$VPN_USER" l2tpd "$VPN_PASSWORD" *
 EOF
@@ -49,18 +57,20 @@ $VPN_USER:$VPN_PASSWORD_ENC:xauth-psk
 EOF
 mkdir -p /etc/ppp/limits
 echo "$VPN_USER:$LIMIT_MB" >> /etc/ppp/limits/bw.conf
+echo "$VPN_USER:$LIMIT_IP" >> /etc/ppp/limits/ip.conf
 chmod 600 /etc/ppp/chap-secrets* /etc/ipsec.d/passwd*
-echo -e "### $VPN_USER $exp $VPN_PASSWORD $LIMIT_MB">>"/var/lib/crot/data-user-l2tp"
+echo -e "### $VPN_USER $exp $LIMIT_MB $LIMIT_IP">>"/var/lib/crot/data-user-l2tp"
 cat <<EOF
 
 L2TP/IPSEC PSK VPN
+
 IP/Host    : $PUBLIC_IP
 Domain     : $domain
 IPsec PSK  : myvpn
 Username   : $VPN_USER
 Password   : $VPN_PASSWORD
-Limit      : ${LIMIT_MB} Mbps
+Limit      : ${LIMIT_MB}Mbps (input ${LIMIT_INPUT})
+Limit IP   : ${LIMIT_IP} Device
 Created    : $hariini
 Expired    : $exp
-Script Mod By SL + BW
 EOF
