@@ -3,7 +3,7 @@
 # Ubuntu 18.04 & 20.04 bit
 # Centos 7 & 8 64bit 
 # Mod By SL
-# SL + BW LIMIT MOD
+# SL + BW + IP LIMIT MOD
 # ==========================================
 # Color
 RED='\033[0;31m'
@@ -261,10 +261,11 @@ bigecho "Starting services..."
 sysctl -e -q -p
 chmod 600 /etc/ipsec.secrets* /etc/ppp/chap-secrets* /etc/ipsec.d/passwd*
 
-# ===== MOD BW + TRACKER ONLINE =====
+# ===== MOD BW + IP LIMIT + TRACKER ONLINE - FIXED =====
 mkdir -p /run/pluto
 mkdir -p /etc/ppp/ip-up.d /etc/ppp/limits /var/run/l2tp-active /tmp/l2tp_traffic /var/lib/crot
 touch /etc/ppp/limits/bw.conf
+touch /etc/ppp/limits/ip.conf
 touch /var/lib/crot/data-user-l2tp
 touch /var/lib/crot/data-user-pptp
 
@@ -273,24 +274,42 @@ cat > /etc/ppp/ip-up <<'ENDUP'
 IFACE=$1
 USER=$PEERNAME
 BW_FILE="/etc/ppp/limits/bw.conf"
-mkdir -p /var/run/l2tp-active
-echo $IFACE > /var/run/l2tp-active/$USER
-LIMIT_MB=$(grep "^$USER:" $BW_FILE | cut -d: -f2 | tail -1)
-[ -z "$LIMIT_MB" ] && LIMIT_MB="50"
+IP_FILE="/etc/ppp/limits/ip.conf"
+ACTIVE_DIR="/var/run/l2tp-active"
+mkdir -p $ACTIVE_DIR
+
+LIMIT_IP=$(grep "^$USER:" $IP_FILE 2>/dev/null | cut -d: -f2 | tail -1)
+[ -z "$LIMIT_IP" ] && LIMIT_IP=2
+
+COUNT=0
+for f in $ACTIVE_DIR/$USER* ; do
+  [ -e "$f" ] || continue
+  OLD=$(cat $f 2>/dev/null)
+  if ip link show $OLD &>/dev/null; then COUNT=$((COUNT+1)); else rm -f $f; fi
+done
+
+if [ "$COUNT" -ge "$LIMIT_IP" ]; then exit 1; fi
+
+echo $IFACE > $ACTIVE_DIR/${USER}_$IFACE
+echo $IFACE > $ACTIVE_DIR/$USER
+
+LIMIT_MB=$(grep "^$USER:" $BW_FILE 2>/dev/null | cut -d: -f2 | tail -1)
+[ -z "$LIMIT_MB" ] && LIMIT_MB=50
 tc qdisc del dev $IFACE root 2>/dev/null
-tc qdisc add dev $IFACE root handle 1: htb default 10
-tc class add dev $IFACE parent 1: classid 1:10 htb rate ${LIMIT_MB}mbit ceil ${LIMIT_MB}mbit
+tc qdisc add dev $IFACE root handle 1: classid 1:10 htb rate ${LIMIT_MB}mbit ceil ${LIMIT_MB}mbit
 tc qdisc add dev $IFACE parent 1:10 handle 10: fq_codel
 ENDUP
 
 cat > /etc/ppp/ip-down <<'ENDDOWN'
 #!/bin/bash
+rm -f /var/run/l2tp-active/${PEERNAME}_$1
 rm -f /var/run/l2tp-active/$PEERNAME
-tc qdisc del dev $1 root 2>/dev/null
 rm -f /tmp/l2tp_traffic/$1
+tc qdisc del dev $1 root 2>/dev/null
 ENDDOWN
 
 chmod +x /etc/ppp/ip-up /etc/ppp/ip-down
+systemctl restart xl2tpd
 # ===== END MOD =====
 
 service fail2ban restart 2>/dev/null
